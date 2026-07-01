@@ -23,6 +23,7 @@ router.get('/', async (req, res) => {
     const staffList = result.rows.map((s) => ({
       ...s,
       telegram_id: s.telegram_id ? s.telegram_id.toString() : null,
+      is_approved: true,
     }));
 
     return successResponse(res, { staff: staffList });
@@ -134,6 +135,7 @@ router.post('/', async (req, res) => {
 
     const member = result.rows[0];
     member.telegram_id = member.telegram_id ? member.telegram_id.toString() : null;
+    member.is_approved = true;
 
     // Sync with users table so the staff member can also log in
     await queryMain(
@@ -240,6 +242,7 @@ router.put('/:id', async (req, res) => {
 
     const member = result.rows[0];
     member.telegram_id = member.telegram_id ? member.telegram_id.toString() : null;
+    member.is_approved = true;
 
     if (member && member.username) {
       const uUpdates = [];
