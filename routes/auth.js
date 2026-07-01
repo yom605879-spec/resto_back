@@ -176,7 +176,7 @@ router.put('/approve/:id', authenticate, async (req, res) => {
     const result = await queryMain(
       `UPDATE users SET is_approved = TRUE, restaurant_id = $1
        WHERE id = $2 AND is_approved = FALSE
-       RETURNING id, username, role, is_approved`,
+       RETURNING id, telegram_id, username, first_name, last_name, password_hash, role, is_approved`,
       [targetRestaurantId, id]
     );
 
@@ -184,7 +184,27 @@ router.put('/approve/:id', authenticate, async (req, res) => {
       return errorResponse(res, 'Foydalanuvchi topilmadi yoki allaqachon tasdiqlangan.', 404);
     }
 
-    return successResponse(res, { user: result.rows[0] });
+    const approvedUser = result.rows[0];
+    const staffRoles = ['admin', 'kassir', 'oshpaz', 'ofitsiant', 'cashier', 'chef', 'waiter'];
+
+    if (staffRoles.includes(approvedUser.role)) {
+      await queryMain(
+        `INSERT INTO staff (telegram_id, username, first_name, last_name, password_hash, role, salary_type, fixed_salary, percentage_rate, restaurant_id, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, 'fixed', 0, 0, $7, TRUE)
+         ON CONFLICT DO NOTHING`,
+        [
+          approvedUser.telegram_id || null,
+          approvedUser.username,
+          approvedUser.first_name || null,
+          approvedUser.last_name || null,
+          approvedUser.password_hash || null,
+          approvedUser.role,
+          targetRestaurantId
+        ]
+      ).catch(err => console.error('Error syncing approved user to staff table:', err));
+    }
+
+    return successResponse(res, { user: approvedUser });
   } catch (error) {
     console.error('Approve user error:', error);
     return errorResponse(res, 'Server xatosi.', 500);

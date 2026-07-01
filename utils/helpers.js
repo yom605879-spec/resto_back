@@ -30,8 +30,12 @@ export const validateRequiredFields = (body, fields) => {
 export const ROLES = {
   BOSS: 'boss',
   ADMIN: 'admin',
-  CASHIER: 'cashier',
-  CHEF: 'chef',
+  CASHIER: 'kassir',
+  CHEF: 'oshpaz',
+  WAITER: 'ofitsiant',
+  CASHIER_EN: 'cashier',
+  CHEF_EN: 'chef',
+  WAITER_EN: 'waiter',
 };
 
 export const ORDER_STATUSES = ['new', 'preparing', 'ready', 'served', 'completed', 'cancelled'];

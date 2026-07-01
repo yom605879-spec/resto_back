@@ -68,7 +68,7 @@ router.post('/', async (req, res) => {
       return errorResponse(res, validationError);
     }
 
-    const allowedRoles = [ROLES.ADMIN, ROLES.CASHIER, ROLES.CHEF];
+    const allowedRoles = [ROLES.ADMIN, ROLES.CASHIER, ROLES.CHEF, ROLES.WAITER, 'admin', 'kassir', 'oshpaz', 'ofitsiant', 'cashier', 'chef', 'waiter'];
     if (!allowedRoles.includes(role)) {
       return errorResponse(res, `Invalid role. Allowed: ${allowedRoles.join(', ')}`);
     }
@@ -135,6 +135,22 @@ router.post('/', async (req, res) => {
     const member = result.rows[0];
     member.telegram_id = member.telegram_id ? member.telegram_id.toString() : null;
 
+    // Sync with users table so the staff member can also log in
+    await queryMain(
+      `INSERT INTO users (telegram_id, username, first_name, last_name, password_hash, role, is_approved, is_active, restaurant_id)
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE, TRUE, $7)
+       ON CONFLICT (username) DO UPDATE SET role = EXCLUDED.role, is_approved = TRUE, is_active = TRUE, restaurant_id = EXCLUDED.restaurant_id`,
+      [
+        telegram_id ? telegram_id.toString() : null,
+        usernameLower,
+        first_name || null,
+        last_name || null,
+        passwordHash,
+        role,
+        req.user.restaurant_id,
+      ]
+    ).catch(e => console.error('Sync to users error:', e));
+
     return successResponse(res, { staff: member }, 201);
   } catch (error) {
     console.error('Create staff error:', error);
@@ -161,7 +177,7 @@ router.put('/:id', async (req, res) => {
     }
 
     if (role) {
-      const allowedRoles = [ROLES.ADMIN, ROLES.CASHIER, ROLES.CHEF];
+      const allowedRoles = [ROLES.ADMIN, ROLES.CASHIER, ROLES.CHEF, ROLES.WAITER, 'admin', 'kassir', 'oshpaz', 'ofitsiant', 'cashier', 'chef', 'waiter'];
       if (!allowedRoles.includes(role)) {
         return errorResponse(res, `Invalid role. Allowed: ${allowedRoles.join(', ')}`);
       }
@@ -225,6 +241,21 @@ router.put('/:id', async (req, res) => {
     const member = result.rows[0];
     member.telegram_id = member.telegram_id ? member.telegram_id.toString() : null;
 
+    if (member && member.username) {
+      const uUpdates = [];
+      const uParams = [];
+      let uIdx = 1;
+      if (first_name !== undefined) { uUpdates.push(`first_name = $${uIdx++}`); uParams.push(first_name); }
+      if (last_name !== undefined) { uUpdates.push(`last_name = $${uIdx++}`); uParams.push(last_name); }
+      if (role) { uUpdates.push(`role = $${uIdx++}`); uParams.push(role); }
+      if (passwordHash) { uUpdates.push(`password_hash = $${uIdx++}`); uParams.push(passwordHash); }
+      if (is_active !== undefined) { uUpdates.push(`is_active = $${uIdx++}`); uParams.push(is_active); }
+      if (uUpdates.length > 0) {
+        uParams.push(member.username);
+        await queryMain(`UPDATE users SET ${uUpdates.join(', ')} WHERE username = $${uIdx++}`, uParams).catch(e => console.error('Update user sync error:', e));
+      }
+    }
+
     return successResponse(res, { staff: member });
   } catch (error) {
     console.error('Update staff error:', error);
@@ -237,14 +268,14 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await queryMain(
-      'DELETE FROM staff WHERE id = $1 AND restaurant_id = $2 RETURNING id',
-      [id, req.user.restaurant_id]
-    );
-
-    if (result.rows.length === 0) {
+    const staffRes = await queryMain('SELECT username FROM staff WHERE id = $1 AND restaurant_id = $2', [id, req.user.restaurant_id]);
+    if (staffRes.rows.length === 0) {
       return errorResponse(res, 'Staff member not found.', 404);
     }
+    const { username } = staffRes.rows[0];
+
+    await queryMain('DELETE FROM staff WHERE id = $1 AND restaurant_id = $2', [id, req.user.restaurant_id]);
+    await queryMain('UPDATE users SET is_active = FALSE WHERE username = $1', [username]).catch(e => console.error('Delete user sync error:', e));
 
     return successResponse(res, { message: 'Staff member deleted successfully.' });
   } catch (error) {
