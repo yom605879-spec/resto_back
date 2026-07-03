@@ -310,16 +310,24 @@ export const initDatabase = async () => {
     );
   `;
 
+  const executeWithRetry = async (pool, sql, label, retries = 3) => {
+    for (let i = 1; i <= retries; i++) {
+      try {
+        console.log(`[${label}] DB init (attempt ${i})...`);
+        await pool.query(sql);
+        return;
+      } catch (err) {
+        console.warn(`[${label}] Attempt ${i} failed: ${err.message}`);
+        if (i === retries) throw err;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+  };
+
   try {
-    console.log('[1/3] Main DB init...');
-    await poolMain.query(sqlMain);
-    
-    console.log('[2/3] Media DB init...');
-    await poolMedia.query(sqlMedia);
-    
-    console.log('[3/3] Logs DB init...');
-    await poolLogs.query(sqlLogs);
-    
+    await executeWithRetry(poolMain, sqlMain, '1/3 Main');
+    await executeWithRetry(poolMedia, sqlMedia, '2/3 Media');
+    await executeWithRetry(poolLogs, sqlLogs, '3/3 Logs');
     console.log('All 3 databases initialized successfully.');
   } catch (error) {
     console.error('Failed to initialize sharded databases:', error.message);
