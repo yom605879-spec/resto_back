@@ -7,7 +7,7 @@ import { successResponse, errorResponse, validateRequiredFields, ROLES } from '.
 const router = Router();
 
 router.use(authenticate);
-router.use(authorize(ROLES.BOSS));
+router.use(authorize(ROLES.BOSS, ROLES.ADMIN));
 
 // GET /api/staff
 router.get('/', async (req, res) => {
