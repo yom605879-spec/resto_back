@@ -373,6 +373,12 @@ router.post('/', async (req, res) => {
       return errorResponse(res, `Invalid order type. Allowed: ${ORDER_TYPES.join(', ')}`);
     }
 
+    let targetRestaurantId = req.user.restaurant_id;
+    if (!targetRestaurantId) {
+      const restRes = await client.queryMain('SELECT id FROM restaurants ORDER BY id ASC LIMIT 1');
+      targetRestaurantId = restRes.rows.length > 0 ? restRes.rows[0].id : 1;
+    }
+
     await client.queryMain('BEGIN');
 
     let totalAmount = 0;
@@ -390,7 +396,7 @@ router.post('/', async (req, res) => {
 
       const menuItem = await client.queryMain(
         'SELECT id, name, price FROM menu_items WHERE id = $1 AND restaurant_id = $2 AND is_available = TRUE',
-        [menuItemId, req.user.restaurant_id]
+        [menuItemId, targetRestaurantId]
       );
 
       if (menuItem.rows.length === 0) {
@@ -421,7 +427,7 @@ router.post('/', async (req, res) => {
        RETURNING id, customer_name, customer_phone, table_number, order_type, status,
                  total_amount, payment_method, payment_status, notes, created_at`,
       [
-        req.user.restaurant_id,
+        targetRestaurantId,
         customer_name || null,
         customer_phone || null,
         table_number || null,

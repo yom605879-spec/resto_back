@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { queryMedia } from '../db/init.js';
+import { queryMedia, queryMain, seedDefaultMenu } from '../db/init.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { successResponse, errorResponse, validateRequiredFields, ROLES } from '../utils/helpers.js';
 
@@ -10,13 +10,24 @@ router.get('/public/:restaurant_id', async (req, res) => {
   try {
     const { restaurant_id } = req.params;
 
-    const categoriesResult = await queryMedia(
+    let categoriesResult = await queryMedia(
       `SELECT id, name, sort_order, is_active
        FROM menu_categories
        WHERE restaurant_id = $1 AND is_active = TRUE
        ORDER BY sort_order ASC, name ASC`,
       [restaurant_id]
     );
+
+    if (categoriesResult.rows.length === 0 && restaurant_id) {
+      await seedDefaultMenu(restaurant_id);
+      categoriesResult = await queryMedia(
+        `SELECT id, name, sort_order, is_active
+         FROM menu_categories
+         WHERE restaurant_id = $1 AND is_active = TRUE
+         ORDER BY sort_order ASC, name ASC`,
+        [restaurant_id]
+      );
+    }
 
     const itemsResult = await queryMedia(
       `SELECT id, category_id, name, description, price, image_url, is_available as available, created_at
@@ -45,19 +56,40 @@ router.use(authenticate);
 // GET /api/menu/categories
 router.get('/categories', async (req, res) => {
   try {
-    const categoriesResult = await queryMedia(
+    let restaurantId = req.user.restaurant_id;
+    if (!restaurantId) {
+      const restRes = await queryMain('SELECT id FROM restaurants ORDER BY id ASC LIMIT 1');
+      if (restRes.rows.length > 0) {
+        restaurantId = restRes.rows[0].id;
+      } else {
+        restaurantId = 1;
+      }
+    }
+
+    let categoriesResult = await queryMedia(
       `SELECT id, name, sort_order, is_active
        FROM menu_categories
        WHERE restaurant_id = $1
        ORDER BY sort_order ASC, name ASC`,
-      [req.user.restaurant_id]
+      [restaurantId]
     );
+
+    if (categoriesResult.rows.length === 0 && restaurantId) {
+      await seedDefaultMenu(restaurantId);
+      categoriesResult = await queryMedia(
+        `SELECT id, name, sort_order, is_active
+         FROM menu_categories
+         WHERE restaurant_id = $1
+         ORDER BY sort_order ASC, name ASC`,
+        [restaurantId]
+      );
+    }
 
     const itemsResult = await queryMedia(
       `SELECT id, category_id, name, description, price, image_url, is_available as available, created_at
        FROM menu_items
        WHERE restaurant_id = $1`,
-      [req.user.restaurant_id]
+      [restaurantId]
     );
 
     const categories = categoriesResult.rows.map(cat => ({

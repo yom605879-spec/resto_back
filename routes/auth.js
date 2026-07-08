@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { queryMain } from '../db/init.js';
+import { queryMain, seedDefaultMenu } from '../db/init.js';
 import { successResponse, errorResponse, validateRequiredFields } from '../utils/helpers.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -355,6 +355,7 @@ router.post('/google-register', async (req, res) => {
       );
       restaurantId = restaurantResult.rows[0].id;
       await queryMain('UPDATE users SET restaurant_id = $1 WHERE id = $2', [restaurantId, user.id]);
+      await seedDefaultMenu(restaurantId);
     }
 
     if (!isApproved) {
@@ -415,6 +416,7 @@ router.post('/branches', authenticate, async (req, res) => {
       `INSERT INTO restaurants (name, owner_id) VALUES ($1, $2) RETURNING id, name, created_at, is_active`,
       [name, req.user.id]
     );
+    await seedDefaultMenu(result.rows[0].id);
     return successResponse(res, { branch: result.rows[0] });
   } catch (error) {
     console.error('Add branch error:', error);

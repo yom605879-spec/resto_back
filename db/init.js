@@ -329,8 +329,81 @@ export const initDatabase = async () => {
     await executeWithRetry(poolMedia, sqlMedia, '2/3 Media');
     await executeWithRetry(poolLogs, sqlLogs, '3/3 Logs');
     console.log('All 3 databases initialized successfully.');
+
+    try {
+      const restaurants = await queryMain('SELECT id FROM restaurants');
+      for (const rest of restaurants.rows) {
+        await seedDefaultMenu(rest.id);
+      }
+    } catch (e) {
+      console.error('Error auto-seeding existing restaurants:', e.message);
+    }
   } catch (error) {
     console.error('Failed to initialize sharded databases:', error.message);
     throw error;
+  }
+};
+
+export const seedDefaultMenu = async (restaurantId) => {
+  if (!restaurantId) return;
+  try {
+    const catCheck = await queryMedia('SELECT id FROM menu_categories WHERE restaurant_id = $1 LIMIT 1', [restaurantId]);
+    if (catCheck.rows && catCheck.rows.length > 0) {
+      return; // Already has categories/menu
+    }
+
+    console.log(`[SEED] Seeding demo menu items for restaurant_id = ${restaurantId}...`);
+
+    // 1. Asosiy Taomlar
+    const cat1Res = await queryMedia(
+      'INSERT INTO menu_categories (restaurant_id, name, sort_order) VALUES ($1, $2, $3) RETURNING id',
+      [restaurantId, 'Asosiy Taomlar', 1]
+    );
+    const cat1Id = cat1Res.rows[0].id;
+
+    await queryMedia(
+      'INSERT INTO menu_items (category_id, restaurant_id, name, description, price, image_url, is_available) VALUES ($1, $2, $3, $4, $5, $6, TRUE)',
+      [cat1Id, restaurantId, 'Truffle Ribeye Steak', "Olovda pishirilgan premium mol go'shti, trufel sousi bilan.", 245000, "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80"]
+    );
+    await queryMedia(
+      'INSERT INTO menu_items (category_id, restaurant_id, name, description, price, image_url, is_available) VALUES ($1, $2, $3, $4, $5, $6, TRUE)',
+      [cat1Id, restaurantId, 'Qirollik Qisqichbaqasi', "Sarimsoq va limon sousida qovurilgan ulkan qisqichbaqa oyoqlari.", 320000, "https://images.unsplash.com/photo-1559742811-822873691df8?auto=format&fit=crop&w=400&q=80"]
+    );
+
+    // 2. Pitsa va Sushi
+    const cat2Res = await queryMedia(
+      'INSERT INTO menu_categories (restaurant_id, name, sort_order) VALUES ($1, $2, $3) RETURNING id',
+      [restaurantId, 'Pitsa va Sushi', 2]
+    );
+    const cat2Id = cat2Res.rows[0].id;
+
+    await queryMedia(
+      'INSERT INTO menu_items (category_id, restaurant_id, name, description, price, image_url, is_available) VALUES ($1, $2, $3, $4, $5, $6, TRUE)',
+      [cat2Id, restaurantId, "Sushi Set 'Tokyo'", "Yangi losos, orkinos va qisqichbaqa go'shtidan iborat 24 talik set.", 180000, "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=400&q=80"]
+    );
+    await queryMedia(
+      'INSERT INTO menu_items (category_id, restaurant_id, name, description, price, image_url, is_available) VALUES ($1, $2, $3, $4, $5, $6, TRUE)',
+      [cat2Id, restaurantId, 'Margarita Pitsasi', "Haqiqiy italyancha resept. Motsarella pishlog'i va pomidor sousi.", 95000, "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=400&q=80"]
+    );
+
+    // 3. Shirinliklar va Dezertlar
+    const cat3Res = await queryMedia(
+      'INSERT INTO menu_categories (restaurant_id, name, sort_order) VALUES ($1, $2, $3) RETURNING id',
+      [restaurantId, 'Shirinliklar va Dezertlar', 3]
+    );
+    const cat3Id = cat3Res.rows[0].id;
+
+    await queryMedia(
+      'INSERT INTO menu_items (category_id, restaurant_id, name, description, price, image_url, is_available) VALUES ($1, $2, $3, $4, $5, $6, TRUE)',
+      [cat3Id, restaurantId, 'Pista va Malina Dezerti', "Fransuzcha makaron, yangi malina va maxsus pista kremi.", 65000, "https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?auto=format&fit=crop&w=400&q=80"]
+    );
+    await queryMedia(
+      'INSERT INTO menu_items (category_id, restaurant_id, name, description, price, image_url, is_available) VALUES ($1, $2, $3, $4, $5, $6, TRUE)',
+      [cat3Id, restaurantId, 'Tiramisu Klasik', "Mascarpone pishlog'i va kofe ekstrakti bilan tayyorlangan shirinlik.", 55000, "https://images.unsplash.com/photo-1571115177098-24ec42ed204d?auto=format&fit=crop&w=400&q=80"]
+    );
+
+    console.log(`[SEED] Seeding demo menu completed for restaurant_id = ${restaurantId}`);
+  } catch (error) {
+    console.error(`[SEED] Error seeding menu for restaurant_id = ${restaurantId}:`, error.message);
   }
 };
