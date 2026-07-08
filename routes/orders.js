@@ -124,7 +124,7 @@ router.post('/public/:restaurant_id', async (req, res) => {
       return errorResponse(res, `Invalid order type. Allowed: ${ORDER_TYPES.join(', ')}`);
     }
 
-    const restaurantCheck = await client.queryMain(
+    const restaurantCheck = await client.query(
       'SELECT id, name FROM restaurants WHERE id = $1 AND is_active = TRUE',
       [restaurant_id]
     );
@@ -134,7 +134,7 @@ router.post('/public/:restaurant_id', async (req, res) => {
       return errorResponse(res, 'Restaurant not found.', 404);
     }
 
-    await client.queryMain('BEGIN');
+    await client.query('BEGIN');
 
     let totalAmount = 0;
     const orderItems = [];
@@ -144,18 +144,18 @@ router.post('/public/:restaurant_id', async (req, res) => {
       const qty = parseInt(item.quantity);
 
       if (!menuItemId || isNaN(qty) || qty < 1) {
-        await client.queryMain('ROLLBACK');
+        await client.query('ROLLBACK');
         client.release();
         return errorResponse(res, 'Each item must have menu_item_id/menu_item and valid quantity (>= 1).');
       }
 
-      const menuItem = await client.queryMain(
+      const menuItem = await client.query(
         'SELECT id, name, price FROM menu_items WHERE id = $1 AND restaurant_id = $2 AND is_available = TRUE',
         [menuItemId, restaurant_id]
       );
 
       if (menuItem.rows.length === 0) {
-        await client.queryMain('ROLLBACK');
+        await client.query('ROLLBACK');
         client.release();
         return errorResponse(res, `Menu item with ID ${menuItemId} not found or unavailable.`);
       }
@@ -175,7 +175,7 @@ router.post('/public/:restaurant_id', async (req, res) => {
 
     const orderNotes = notes || note || null;
 
-    const orderResult = await client.queryMain(
+    const orderResult = await client.query(
       `INSERT INTO orders (restaurant_id, customer_name, customer_phone, table_number,
                            order_type, total_amount, payment_method, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -196,14 +196,14 @@ router.post('/public/:restaurant_id', async (req, res) => {
     const order = orderResult.rows[0];
 
     for (const orderItem of orderItems) {
-      await client.queryMain(
+      await client.query(
         `INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, total)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [order.id, orderItem.menu_item_id, orderItem.item_name, orderItem.quantity, orderItem.price, orderItem.total]
       );
     }
 
-    await client.queryMain('COMMIT');
+    await client.query('COMMIT');
     client.release();
 
     order.items = orderItems.map(item => ({ ...item, status: 'pending' }));
@@ -228,7 +228,7 @@ router.post('/public/:restaurant_id', async (req, res) => {
 
     return successResponse(res, { order }, 201);
   } catch (error) {
-    await client.queryMain('ROLLBACK');
+    await client.query('ROLLBACK');
     client.release();
     console.error('Public create order error:', error);
     return errorResponse(res, 'Failed to place order.', 500);
@@ -375,11 +375,11 @@ router.post('/', async (req, res) => {
 
     let targetRestaurantId = req.user.restaurant_id;
     if (!targetRestaurantId) {
-      const restRes = await client.queryMain('SELECT id FROM restaurants ORDER BY id ASC LIMIT 1');
+      const restRes = await client.query('SELECT id FROM restaurants ORDER BY id ASC LIMIT 1');
       targetRestaurantId = restRes.rows.length > 0 ? restRes.rows[0].id : 1;
     }
 
-    await client.queryMain('BEGIN');
+    await client.query('BEGIN');
 
     let totalAmount = 0;
     const orderItems = [];
@@ -389,18 +389,18 @@ router.post('/', async (req, res) => {
       const qty = parseInt(item.quantity);
 
       if (!menuItemId || isNaN(qty) || qty < 1) {
-        await client.queryMain('ROLLBACK');
+        await client.query('ROLLBACK');
         client.release();
         return errorResponse(res, 'Each item must have menu_item_id/menu_item and quantity (>= 1).');
       }
 
-      const menuItem = await client.queryMain(
+      const menuItem = await client.query(
         'SELECT id, name, price FROM menu_items WHERE id = $1 AND restaurant_id = $2 AND is_available = TRUE',
         [menuItemId, targetRestaurantId]
       );
 
       if (menuItem.rows.length === 0) {
-        await client.queryMain('ROLLBACK');
+        await client.query('ROLLBACK');
         client.release();
         return errorResponse(res, `Menu item with ID ${menuItemId} not found or unavailable.`);
       }
@@ -420,7 +420,7 @@ router.post('/', async (req, res) => {
 
     const orderNotes = notes || note || null;
 
-    const orderResult = await client.queryMain(
+    const orderResult = await client.query(
       `INSERT INTO orders (restaurant_id, customer_name, customer_phone, table_number,
                            order_type, total_amount, payment_method, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -441,14 +441,14 @@ router.post('/', async (req, res) => {
     const order = orderResult.rows[0];
 
     for (const orderItem of orderItems) {
-      await client.queryMain(
+      await client.query(
         `INSERT INTO order_items (order_id, menu_item_id, item_name, quantity, price, total)
          VALUES ($1, $2, $3, $4, $5, $6)`,
         [order.id, orderItem.menu_item_id, orderItem.item_name, orderItem.quantity, orderItem.price, orderItem.total]
       );
     }
 
-    await client.queryMain('COMMIT');
+    await client.query('COMMIT');
     client.release();
 
     order.items = orderItems.map(item => ({ ...item, status: 'pending' }));
@@ -473,7 +473,7 @@ router.post('/', async (req, res) => {
 
     return successResponse(res, { order }, 201);
   } catch (error) {
-    await client.queryMain('ROLLBACK');
+    await client.query('ROLLBACK');
     client.release();
     console.error('Create order error:', error);
     return errorResponse(res, 'Failed to create order.', 500);
