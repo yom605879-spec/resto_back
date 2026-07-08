@@ -149,7 +149,7 @@ router.post('/public/:restaurant_id', async (req, res) => {
         return errorResponse(res, 'Each item must have menu_item_id/menu_item and valid quantity (>= 1).');
       }
 
-      const menuItem = await client.query(
+      const menuItem = await queryMedia(
         'SELECT id, name, price FROM menu_items WHERE id = $1 AND restaurant_id = $2 AND is_available = TRUE',
         [menuItemId, restaurant_id]
       );
@@ -340,7 +340,7 @@ router.get('/:id', async (req, res) => {
       [id]
     );
 
-    const reviewResult = await queryMain(
+    const reviewResult = await queryLogs(
       `SELECT rating, comment, created_at FROM order_reviews WHERE order_id = $1`,
       [id]
     );
@@ -394,7 +394,7 @@ router.post('/', async (req, res) => {
         return errorResponse(res, 'Each item must have menu_item_id/menu_item and quantity (>= 1).');
       }
 
-      const menuItem = await client.query(
+      const menuItem = await queryMedia(
         'SELECT id, name, price FROM menu_items WHERE id = $1 AND restaurant_id = $2 AND is_available = TRUE',
         [menuItemId, targetRestaurantId]
       );
