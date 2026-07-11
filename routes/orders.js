@@ -255,9 +255,18 @@ router.get('/', async (req, res) => {
     let paramIndex = 1;
 
     if (req.user.role === 'mijoz') {
-      sql += ` AND o.customer_phone = $${paramIndex}`;
-      params.push(req.user.phone);
-      paramIndex++;
+      const customerName = req.user.first_name || req.user.username || 'Mijoz';
+      const userId = req.user.id || 0;
+      const restId = req.user.restaurant_id || 1;
+      if (req.user.phone) {
+        sql += ` AND (o.user_id = $${paramIndex} OR o.customer_phone = $${paramIndex + 1} OR o.customer_name ILIKE $${paramIndex + 2} OR (o.customer_name = 'Mijoz' AND o.restaurant_id = $${paramIndex + 3}))`;
+        params.push(userId, req.user.phone, customerName, restId);
+        paramIndex += 4;
+      } else {
+        sql += ` AND (o.user_id = $${paramIndex} OR o.customer_name ILIKE $${paramIndex + 1} OR (o.customer_name = 'Mijoz' AND o.restaurant_id = $${paramIndex + 2}))`;
+        params.push(userId, customerName, restId);
+        paramIndex += 3;
+      }
     } else {
       sql += ` AND o.restaurant_id = $${paramIndex}`;
       params.push(req.user.restaurant_id);
@@ -298,9 +307,28 @@ router.get('/', async (req, res) => {
     params.push(limit, offset);
 
     const result = await queryMain(sql, params);
+    const ordersList = result.rows;
+
+    if (ordersList.length > 0) {
+      const orderIds = ordersList.map((o) => o.id);
+      const itemsResult = await queryMain(
+        `SELECT order_id, menu_item_id, item_name, quantity, price, total
+         FROM order_items
+         WHERE order_id = ANY($1::int[])`,
+        [orderIds]
+      );
+      const itemsByOrder = {};
+      for (const item of itemsResult.rows) {
+        if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+        itemsByOrder[item.order_id].push(item);
+      }
+      for (const o of ordersList) {
+        o.items = itemsByOrder[o.id] || [];
+      }
+    }
 
     return successResponse(res, {
-      orders: result.rows,
+      orders: ordersList,
       pagination: {
         page,
         limit,
@@ -421,13 +449,14 @@ router.post('/', async (req, res) => {
     const orderNotes = notes || note || null;
 
     const orderResult = await client.query(
-      `INSERT INTO orders (restaurant_id, customer_name, customer_phone, table_number,
+      `INSERT INTO orders (restaurant_id, user_id, customer_name, customer_phone, table_number,
                            order_type, total_amount, payment_method, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, customer_name, customer_phone, table_number, order_type, status,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, restaurant_id, user_id, customer_name, customer_phone, table_number, order_type, status,
                  total_amount, payment_method, payment_status, notes, created_at`,
       [
         targetRestaurantId,
+        req.user?.id || null,
         customer_name || null,
         customer_phone || null,
         table_number || null,

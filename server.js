@@ -13,6 +13,8 @@ import staffRoutes from './routes/staff.js';
 import statsRoutes from './routes/stats.js';
 import expensesRoutes from './routes/expenses.js';
 import complaintsRoutes from './routes/complaints.js';
+import reviewsRoutes from './routes/reviews.js';
+import attendanceRoutes from './routes/attendance.js';
 
 // Admin panel routes
 import tablesRoutes from './routes/tables.js';
@@ -77,6 +79,8 @@ app.use('/api/staff', staffRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/expenses', expensesRoutes);
 app.use('/api/complaints', complaintsRoutes);
+app.use('/api/reviews', reviewsRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // Admin API Routes
 app.use('/api/tables', tablesRoutes);

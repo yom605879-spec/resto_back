@@ -26,6 +26,10 @@ const poolLogs = new Pool({
   max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000,
 });
 
+poolMain.on('error', (err) => console.error('[MAIN] Idle client error:', err.message));
+poolMedia.on('error', (err) => console.error('[MEDIA] Idle client error:', err.message));
+poolLogs.on('error', (err) => console.error('[LOGS] Idle client error:', err.message));
+
 const logQuery = (poolName, text, duration, rowCount) => {
   if (process.env.NODE_ENV === 'development') {
     console.log(`[${poolName}] Query executed`, { text: text.substring(0, 80), duration: `${duration}ms`, rows: rowCount });
@@ -193,7 +197,22 @@ export const initDatabase = async () => {
       quantity_required DECIMAL(10,3) NOT NULL,
       created_at TIMESTAMP DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS attendance (
+      id SERIAL PRIMARY KEY,
+      restaurant_id INTEGER REFERENCES restaurants(id) ON DELETE CASCADE,
+      staff_id INTEGER REFERENCES staff(id) ON DELETE CASCADE,
+      work_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      status VARCHAR(20) NOT NULL DEFAULT 'present',
+      check_in TIME,
+      check_out TIME,
+      notes TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (restaurant_id, staff_id, work_date)
+    );
   `;
+
 
   // --- 2. MEDIA DB (Menu, Content & Images) ---
   const sqlMedia = `
